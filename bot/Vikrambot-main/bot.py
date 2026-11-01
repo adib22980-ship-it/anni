@@ -3920,7 +3920,39 @@ async def daily_backup_loop():
 # =============================================================================
 #  ENTRY POINT
 # =============================================================================
+async def start_health_server():
+    """Tiny HTTP server for Render (needs an open PORT) + self-ping so the
+    free web service doesn't sleep. Only runs when PORT is set."""
+    port = os.getenv("PORT")
+    if not port:
+        return
+    from aiohttp import web
+    app = web.Application()
+    async def _ok(_request):
+        return web.Response(text="ok")
+    app.router.add_get("/", _ok)
+    app.router.add_get("/health", _ok)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", int(port)).start()
+    logger.info(f"✅ Health server on port {port}")
+
+    url = os.getenv("RENDER_EXTERNAL_URL")
+    if url:
+        async def _selfping():
+            import aiohttp
+            while True:
+                await asyncio.sleep(600)
+                try:
+                    async with aiohttp.ClientSession() as sess:
+                        await sess.get(url + "/health", timeout=aiohttp.ClientTimeout(total=15))
+                except Exception:
+                    pass
+        asyncio.create_task(_selfping())
+
+
 async def main():
+    await start_health_server()
     await init_db_pool()          # ← connect to MongoDB first
     await setup_db()              # ← create indexes
     await bot.start(bot_token=BOT_TOKEN)

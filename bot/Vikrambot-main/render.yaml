@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: vikrambot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 bot.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: API_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB_NAME
+        value: Vikrambot
+      - key: PAYMENT_LOG_FULL_ID
+        sync: false
+      - key: PAYMENT_LOG_MASKED_ID
+        sync: false
