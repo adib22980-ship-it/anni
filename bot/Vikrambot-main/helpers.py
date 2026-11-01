@@ -8,11 +8,12 @@ from telethon.errors import UserNotParticipantError
 from telethon.tl.functions.channels import GetParticipantRequest
 
 from config import CHECK_CHANNELS, ADMIN_ID
-from database import get_pool, is_user_banned
+from database import get_pool, is_user_banned, ttl_cache
 
 logger = logging.getLogger(__name__)
 
 # ─── Admin / Permission Helpers ──────────────────────────────────────────────
+@ttl_cache(15)
 async def is_admin(uid: int) -> bool:
     if uid == ADMIN_ID:
         return True
@@ -86,7 +87,22 @@ def mask_username(username) -> str:
 
 
 # ─── Force-Subscribe Check ───────────────────────────────────────────────────
+_JOIN_OK = {}
+_JOIN_TTL = 300
+
+
 async def check_channel_joined(bot, uid: int) -> bool:
+    import time as _t
+    ts = _JOIN_OK.get(uid)
+    if ts and _t.monotonic() - ts < _JOIN_TTL:
+        return True
+    ok = await _check_channel_joined(bot, uid)
+    if ok:
+        _JOIN_OK[uid] = _t.monotonic()
+    return ok
+
+
+async def _check_channel_joined(bot, uid: int) -> bool:
     if await is_admin(uid):
         return True
     if not CHECK_CHANNELS:

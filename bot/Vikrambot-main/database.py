@@ -74,6 +74,27 @@ async def keepalive_loop():
 
 # ─── Core helpers ─────────────────────────────────────────────────────────────
 
+
+# ─── Tiny TTL cache (speeds up hot read-only lookups) ────────────────────────
+import time as _time
+import functools as _functools
+
+def ttl_cache(seconds: float):
+    def deco(fn):
+        store = {}
+        @_functools.wraps(fn)
+        async def wrapper(*args):
+            now = _time.monotonic()
+            hit = store.get(args)
+            if hit and now - hit[0] < seconds:
+                return hit[1]
+            val = await fn(*args)
+            store[args] = (now, val)
+            return val
+        wrapper.cache_clear = store.clear
+        return wrapper
+    return deco
+
 async def ensure_user(uid: int):
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -97,6 +118,7 @@ async def update_balance(uid: int, amount: int):
         )
 
 
+@ttl_cache(15)
 async def is_bot_online() -> bool:
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -124,6 +146,7 @@ async def get_support_url() -> str:
     return url
 
 
+@ttl_cache(15)
 async def get_maint_msg() -> str:
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -136,6 +159,7 @@ async def to_usd(inr) -> float:
     return round(float(inr) / float(rate), 2) if rate else 0.0
 
 
+@ttl_cache(15)
 async def is_referral_enabled() -> bool:
     """Return True if the referral system is ON (default: True)."""
     pool = get_pool()
@@ -144,6 +168,7 @@ async def is_referral_enabled() -> bool:
     return (row["value"] == "on") if row else True
 
 
+@ttl_cache(15)
 async def is_images_enabled() -> bool:
     """Return True if banner images are enabled (default: True)."""
     pool = get_pool()
@@ -182,6 +207,7 @@ async def get_stock_layout() -> str:
     return row["value"] if row and row["value"] in ("side_by_side", "one_by_one") else "side_by_side"
 
 
+@ttl_cache(15)
 async def get_welcome_msg(first_name: str = "there") -> str:
     """Return the welcome message, with {name} replaced by the user's first name.
     Falls back to the default message if none is set in the DB."""
